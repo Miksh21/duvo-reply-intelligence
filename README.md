@@ -13,7 +13,7 @@
 5. **The reply actually sent** in lemlist — on the prospect's channel (works across email / LinkedIn / WhatsApp).
 6. **The Slack thread** — ✅ reaction + an "Accepted" confirmation; the card is kept, not replaced.
 
-*The one thing you can't see on camera is the reply-detection lag — that's lemlist's mailbox poll (same across channels). The honest limits and a week-one roadmap are at the bottom.*
+*Two notes: the demo uses **sample leads** (real companies, synthetic contacts); and the one thing you can't see on camera is the reply-detection lag — lemlist's mailbox poll (same across channels), covered in the honest limits at the bottom.*
 
 ---
 
@@ -28,7 +28,7 @@ Hi Tom — you said pick something slow and manual that drives me a bit mad, fix
 **The calls I made:**
 
 - **Human in the loop on the *send*, automation on everything else.** The expensive mistake is an AI reply hitting a real buyer. So the AI does all the grunt work — triage, enrich, draft, propose a time, stage the deal — and the human keeps the one decision that's actually theirs: hit send. That's deliberate, not a v1 shortcut. It's also where I'd keep it even at scale.
-- **Enrich the account, not the email.** A buyer replies from a gmail address; that tells you nothing. I enrich the *company* (Sumble + Exa, keyed off the account domain), so the tier is real even when the from-address is a personal inbox. P&G's reply comes back 🟢 HOT with their RPA stack; About You comes back cooler because it genuinely has no RPA footprint — the scoring discriminates instead of rubber-stamping everyone.
+- **Enrich the account, not the email.** A buyer replies from a gmail address; that tells you nothing. I enrich the *company* (Sumble + Exa, keyed off the account domain), so the tier is real even when the from-address is a personal inbox. A reply tied to a heavy-RPA enterprise comes back 🟢 HOT; one tied to a company with no automation footprint comes back cold — the scoring discriminates instead of rubber-stamping every reply.
 - **Use the platform's real primitives, honestly.** HubSpot's native node has no *meetings* resource and lemlist's has no *inbox* — I checked the catalog rather than guessing — so those are credentialed HTTP calls against the real APIs (each still carrying its real encrypted credential). Exa uses its native node. I reach for the right call, not the pretty one.
 - **It actually runs.** Real deals and meetings created in HubSpot, real replies sent through lemlist, on self-hosted n8n. The Loom shows a reply going in and a booked meeting coming out.
 
@@ -46,16 +46,16 @@ So I automated the parts that are judgment-free (read the reply, classify intent
 
 ## Does it run? Yes.
 
-Live on a self-hosted n8n instance, one merged workflow (`ccZKe2AxatGTER4E`, **46 nodes**, two webhook triggers), wired to **real** credentials:
+Live on a self-hosted n8n instance, one merged workflow (**46 nodes**, two webhook triggers), wired to **real** credentials:
 
 - **Anthropic Claude** — triage + draft (real `claude-sonnet-4-6`)
-- **Sumble** — real technographic enrichment (drove a P&G reply to HOT with 5 RPA platforms + 1,211 automation roles)
+- **Sumble** — real technographic enrichment (scored a heavy-automation enterprise HOT — 5 RPA platforms, 1,200+ open automation roles)
 - **Exa** — real account research, rendered in the card
 - **HubSpot** — real EU portal; deals + meetings actually created and associated
 - **lemlist** — real reply webhook + real outbound sends (`{ok:true}`, verified the message lands in the conversation)
 - **Slack** — real bot, real approval card in `#lead-replies`
 
-Verified end-to-end (e.g. a P&G reply → deal created → card → Accept → HubSpot meeting created + associated → lemlist send `ok:true` → ✅ react + threaded confirm). `workflow/reply-intelligence.workflow.json` is the importable export (credential IDs placeholdered).
+Verified end-to-end (a real reply → deal found/created → card → Accept → HubSpot meeting created + associated → lemlist send `ok:true` → ✅ react + threaded confirm). `workflow/reply-intelligence.workflow.json` is the importable export (credential IDs placeholdered).
 
 ![Architecture](docs/architecture.png)
 
@@ -89,7 +89,7 @@ lemlist reply (webhook)
 | + **Anthropic** | ✅ | triage (strict JSON) + drafting |
 | + **Slack** | ✅ | the human-in-the-loop approval surface |
 
-> **Two of these aren't in your named stack — Sumble and Anthropic — and that's deliberate.** You said *"use whatever you'd reach for on a normal day,"* so I did. **Sumble** is the signal I reach for to score an account's **automation / RPA footprint** — which is exactly Duvo's wedge — so the tier answers *"who's worth the rep's time"* instead of treating every reply alike (P&G → 🟢 HOT, About You → cold; it discriminates, it doesn't rubber-stamp). And it's **pluggable, not load-bearing**: the loop runs without it, so if you standardize on a different enrichment source it drops out without touching the rest. Same story for Anthropic doing triage + drafting — I'd swap either for whatever Duvo runs.
+> **Two of these aren't in your named stack — Sumble and Anthropic — and that's deliberate.** You said *"use whatever you'd reach for on a normal day,"* so I did. **Sumble** is the signal I reach for to score an account's **automation / RPA footprint** — which is exactly Duvo's wedge — so the tier answers *"who's worth the rep's time"* instead of treating every reply alike (a heavy-RPA enterprise comes back 🟢 HOT, a light-footprint company comes back cold; it discriminates, it doesn't rubber-stamp). And it's **pluggable, not load-bearing**: the loop runs without it, so if you standardize on a different enrichment source it drops out without touching the rest. Same story for Anthropic doing triage + drafting — I'd swap either for whatever Duvo runs.
 
 ## Reply triage: what it handles, and what it doesn't yet
 
@@ -120,7 +120,7 @@ The honest summary: **the current system handles binary positive/negative + admi
 
 Tom — you asked where it falls over at scale. The real ones, from building it:
 
-1. **lemlist reply-detection latency — the #1 limit, and it's upstream of everything I built.** lemlist detects a reply by *polling the mailbox*, then fires the webhook. I watched this range from ~2 minutes to stuck for hours (one reply at 16:48 didn't fire until 16:52). Every step *I* built is single-digit seconds; the system is only as real-time as lemlist's poll, and that clock starts before my webhook is even called. During the demo I pre-send the reply ~4 min early — that's me working *around* it, not solving it. The fix has to bypass lemlist for **detection** (below).
+1. **lemlist reply-detection latency — the #1 limit, and it's upstream of everything I built.** lemlist detects a reply by *polling the mailbox*, then fires the webhook. I watched it range from ~2 minutes to stuck for hours. Every step *I* built is single-digit seconds; the system is only as real-time as lemlist's poll, and that clock starts before my webhook is even called. During the demo I pre-send the reply ~4 min early — that's me working *around* it, not solving it. The fix has to bypass lemlist for **detection** (below).
 2. **Sumble/Exa credit ceilings fail *silently*.** Sumble charges per technology found; I burned a key to 0 mid-build and every card quietly degraded to ⚪ COLD — no "this is a billing problem" signal on the card. A sales team would trust a cold tier that's actually just an empty wallet. (Nodes are `onError: continue`, so it degrades instead of crashing — arguably the more dangerous failure.)
 3. **Find-or-create deal has a dedup race.** lemlist replies carry no `dealId`, so I search-then-create on `prospect_email`. HubSpot search is eventually consistent (~seconds), so a *second* reply inside that window sees 0 and double-creates the deal. Idempotent in the happy path, not under bursts.
 4. **The lemlist send only works into an existing conversation.** The working call is `POST /api/inbox/email` with a contact-keyed body (`contactId/leadId/sendUser*`). You can't send to a bare email — it's "reply within a thread lemlist already owns," which fits the use case but isn't a general send primitive.
