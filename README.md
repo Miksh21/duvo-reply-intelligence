@@ -2,8 +2,18 @@
 
 **The reply is the highest-intent moment in outbound — and it's where deals quietly die in a human queue.** This handles it: a prospect replies, it gets triaged, the account gets enriched, a calendar-aware reply gets drafted, a HubSpot deal + meeting get created, and the reply gets sent — with a human approving every send.
 
-> 🎥 **Loom (~4 min — watch this first):** `‹add link›`
+> 🎥 **Loom — a silent screen-capture of it actually working:** `‹add link›`  *(no voiceover; the narration is right here in text — read along)*
 > 🔧 **It runs live** on self-hosted n8n against **real** HubSpot, lemlist, Sumble, Exa, Anthropic and Slack — no mocks. Importable workflow + diagram below.
+
+**What the Loom shows (read along):**
+1. **The Slack approval card** a real reply produced — account tier (Sumble), the prospect's reply, Exa research, the proposed time, and Claude's draft. *It drafted; it did not send.*
+2. **The n8n run** that produced it — reply → triage → enrich → find/create HubSpot deal → draft → post → **stops at the human gate**.
+3. **[✅ Accept & send]** clicked.
+4. **The HubSpot meeting** — created and associated to the deal. *(No calendar integration by design — HubSpot↔Google Workspace should own the actual invite; I'd verify that mapping at Duvo rather than rebuild it.)*
+5. **The reply actually sent** in lemlist — on the prospect's channel (works across email / LinkedIn / WhatsApp).
+6. **The Slack thread** — ✅ reaction + an "Accepted" confirmation; the card is kept, not replaced.
+
+*The one thing you can't see on camera is the reply-detection lag — that's lemlist's mailbox poll (same across channels). The honest limits and a week-one roadmap are at the bottom.*
 
 ---
 
