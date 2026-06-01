@@ -89,6 +89,8 @@ lemlist reply (webhook)
 | + **Anthropic** | ✅ | triage (strict JSON) + drafting |
 | + **Slack** | ✅ | the human-in-the-loop approval surface |
 
+> **Two of these aren't in your named stack — Sumble and Anthropic — and that's deliberate.** You said *"use whatever you'd reach for on a normal day,"* so I did. **Sumble** is the signal I reach for to score an account's **automation / RPA footprint** — which is exactly Duvo's wedge — so the tier answers *"who's worth the rep's time"* instead of treating every reply alike (P&G → 🟢 HOT, About You → cold; it discriminates, it doesn't rubber-stamp). And it's **pluggable, not load-bearing**: the loop runs without it, so if you standardize on a different enrichment source it drops out without touching the rest. Same story for Anthropic doing triage + drafting — I'd swap either for whatever Duvo runs.
+
 ## Reply triage: what it handles, and what it doesn't yet
 
 Triage classifies every reply into **7 categories** — but I want to be precise about what "handled" means:
