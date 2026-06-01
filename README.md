@@ -2,10 +2,10 @@
 
 **The reply is the highest-intent moment in outbound — and it's where deals quietly die in a human queue.** This handles it: a prospect replies, it gets triaged, the account gets enriched, a calendar-aware reply gets drafted, a HubSpot deal + meeting get created, and the reply gets sent — with a human approving every send.
 
-> 🎥 **Loom — a silent screen-capture of it actually working:** `‹add link›`  *(no voiceover; the narration is right here in text — read along)*
+> 🎥 **Loom — [▶ watch it work](https://www.loom.com/share/a0975c9431064d968e90bda08800fbd8).** It's a **silent, click-through** screen-capture (**no audio — by design**): it just shows the thing working. The narration lives right here in text — read along below. (The spoken walkthrough is for our call.)
 > 🔧 **It runs live** on self-hosted n8n against **real** HubSpot, lemlist, Sumble, Exa, Anthropic and Slack — no mocks. Importable workflow + diagram below.
 
-**What the Loom shows (read along):**
+**What the Loom shows** (it's a silent click-through — read along):
 1. **The Slack approval card** a real reply produced — account tier (Sumble), the prospect's reply, Exa research, the proposed time, and Claude's draft. *It drafted; it did not send.*
 2. **The n8n run** that produced it — reply → triage → enrich → find/create HubSpot deal → draft → post → **stops at the human gate**.
 3. **[✅ Accept & send]** clicked.
