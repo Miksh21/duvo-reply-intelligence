@@ -1,0 +1,2044 @@
+{
+  "name": "Reply Intelligence — 4 triggers, 1 workflow",
+  "nodes": [
+    {
+      "id": "A_n0",
+      "name": "A) Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -32
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 1100,
+        "height": 360,
+        "content": "## Reply Intelligence — Trigger A (multichannel + Sumble tier + propose-time)\nReply (email/LinkedIn/WhatsApp) → Claude triage → if positive: Sumble account tier → propose a time matched to what the prospect asked → write signals+tier to the deal → Claude draft → **assemble the Slack approval-card payload**.\n\nCard payload = reply · draft · proposed time (or \"none → manual\") · channel · account tier (rpa_signal+stack) · MEDDPICC. The Slack render + [Accept & send] [Edit→lemlist] buttons attach next (needs Slack app token)."
+      }
+    },
+    {
+      "id": "A_n1",
+      "name": "A) Webhook — reply",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reply-native",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "reply-native"
+    },
+    {
+      "id": "A_n2",
+      "name": "A) Build triage request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const wh = $json.body || $json; const p = wh.prospect || {};\n  const system = `You triage replies to B2B cold outreach (email / LinkedIn / WhatsApp) and extract qualification signals. Return ONLY one JSON object:\n{\"category\": one of \"positive_meeting\"|\"positive_curious\"|\"objection\"|\"referral\"|\"not_interested\"|\"auto_reply\"|\"unsubscribe\",\"confidence\": number,\"reasoning\":\"one sentence\",\"meddpicc_signals\":{\"pain\":string|null,\"competitor\":string|null,\"champion\":string|null,\"timeline\":string|null,\"decision_process\":string|null},\"proposed_meeting\":{\"requested\":boolean,\"prospect_proposed_times\":[]}}\npositive_meeting = wants to talk AND proposes/asks a time; positive_curious = interested, no time. Signals only if the text supports them. prospect_proposed_times = raw phrases.`;\n  const user = `PROSPECT: ${p.name}, ${p.title} at ${p.company}\\nCHANNEL: ${wh.channel || 'email'}\\n\\nREPLY:\\n\"\"\"\\n${wh.replyText}\\n\"\"\"`;\n  return [{ json: { body: { model: 'claude-sonnet-4-6', max_tokens: 800, temperature: 0, system, messages: [{ role: 'user', content: user }] } } }];"
+      }
+    },
+    {
+      "id": "A_n3",
+      "name": "A) Anthropic — triage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        740,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "A_n4",
+      "name": "A) Parse triage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const resp = $json; const text = (resp.content && resp.content[0] && resp.content[0].text) || '';\n  function extract(t) { try { return JSON.parse(t); } catch (e) {} const a = t.indexOf('{'); const b = t.lastIndexOf('}'); if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1)); throw new Error('no json'); }\n  let triage; try { triage = extract(text); } catch (e) { triage = { category: 'parse_error', confidence: 0, meddpicc_signals: {}, proposed_meeting: { requested: false, prospect_proposed_times: [] } }; }\n  const wh = $('A) Webhook — reply').first().json.body || {};\n  return [{ json: { triage, dealId: wh.dealId, prospect: wh.prospect || {}, campaignId: wh.campaignId, channel: (wh.channel || 'email').toLowerCase() } }];"
+      }
+    },
+    {
+      "id": "A_n5",
+      "name": "A) Positive?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1180,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.triage.category }}",
+              "rightValue": "positive",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "A_n6",
+      "name": "A) Resolve domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $json; const p = ctx.prospect || {};\n  const email = p.email || ''; let domain = email.includes('@') ? email.split('@')[1].trim().toLowerCase() : '';\n  const company = (p.company || '').toLowerCase().trim();\n  const map = { 'ahold delhaize': 'aholddelhaize.com', 'henkel': 'henkel.com', 'unilever': 'unilever.com', 'reckitt': 'reckitt.com' };\n  if (!domain || domain.startsWith('example')) domain = map[company] || (company.replace(/[^a-z0-9]/g, '') + '.com');\n  const technologies = ['uipath', 'blue-prism', 'automation-anywhere', 'pega', 'workfusion', 'nice-rpa', 'celonis', 'sap', 'microsoft-power-automate', 'servicenow'];\n  return [{ json: Object.assign({}, ctx, { domain, sumbleBody: { organization: { domain }, filters: { technologies } } }) }];"
+      }
+    },
+    {
+      "id": "A_n7",
+      "name": "A) Sumble — enrich",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1620,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sumble.com/v6/organizations/enrich",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sumbleBody }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YOUR_SUMBLE_CREDENTIAL_ID",
+          "name": "Sumble Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "A_n8",
+      "name": "A) Score automation signal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const enrich = $json || {}; const techs = Array.isArray(enrich.technologies) ? enrich.technologies : [];\n  const rpaSet = ['UiPath', 'Blue Prism', 'Automation Anywhere', 'Pega', 'WorkFusion', 'NICE RPA'];\n  const rpaTools = techs.filter((t) => rpaSet.indexOf(t.name) >= 0);\n  const totalJobs = techs.reduce((n, t) => n + (t.jobs_count || 0), 0);\n  const recentlyHiring = techs.some((t) => t.last_job_post && String(t.last_job_post) >= '2025-01-01');\n  let signal = 'cold'; if (rpaTools.length >= 2 || (rpaTools.length >= 1 && recentlyHiring)) signal = 'hot'; else if (rpaTools.length >= 1 || techs.length >= 1) signal = 'warm';\n  const stack = enrich.technologies_found || techs.map((t) => t.name).join(', ') || 'none found';\n  const summary = `Stack: ${stack}. RPA: ${rpaTools.map((t) => t.name).join(', ') || 'none'}. Automation jobs: ${totalJobs} (hiring: ${recentlyHiring ? 'yes' : 'no'}).`;\n  const ctx = $('A) Resolve domain').first().json;\n  return [{ json: { dealId: ctx.dealId, prospect: ctx.prospect, channel: ctx.channel, triage: ctx.triage, domain: ctx.domain, signal, rpaTools: rpaTools.map((t) => t.name), totalJobs, recentlyHiring, stack, summary } }];"
+      }
+    },
+    {
+      "id": "A_n9",
+      "name": "A) Propose time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $json; const triage = ctx.triage || {};\n  const times = ((triage.proposed_meeting || {}).prospect_proposed_times) || [];\n  const joined = times.join(' ').toLowerCase();\n  const map = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 7 };\n  let hasTime = times.length > 0, proposed = null, proposedISO = null, note = '';\n  if (!hasTime) { note = 'No specific time requested in the reply — flag for the AE to choose manually.'; }\n  else {\n    let dt = $now.setZone('Europe/Prague').set({ hour: 14, minute: 0, second: 0, millisecond: 0 });\n    if (/next week/.test(joined)) dt = dt.plus({ weeks: 1 });\n    let target = null; for (const k in map) { if (joined.includes(k)) { target = map[k]; break; } }\n    if (target) { let d = dt; for (let i = 0; i < 14; i++) { if (d.weekday === target && d > $now) { dt = d; break; } d = d.plus({ days: 1 }); } }\n    else { dt = dt.plus({ days: 2 }); while (dt.weekday > 5) dt = dt.plus({ days: 1 }); }\n    proposed = dt.toFormat(\"cccc, LLLL d 'at' h:mm a 'CET'\"); proposedISO = dt.toISO();\n  }\n  return [{ json: Object.assign({}, ctx, { proposed, proposedISO, hasTime, note, proposedTimes: times }) }];"
+      }
+    },
+    {
+      "id": "A_n10",
+      "name": "A) Build HubSpot update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const d = $json; const t = d.triage || {}; const s = t.meddpicc_signals || {};\n  const props = {}; const put = (k, v) => { if (v != null && String(v).trim() !== '') props[k] = String(v); };\n  put('meddpicc_pain', s.pain); put('meddpicc_competitor', s.competitor); put('meddpicc_champion', s.champion); put('meddpicc_timeline', s.timeline); put('meddpicc_decision_process', s.decision_process);\n  const p = d.prospect || {};\n  props.prospect_name = p.name || ''; props.prospect_title = p.title || ''; props.prospect_email = p.email || ''; props.prospect_company = p.company || '';\n  props.automation_stack = String(d.stack || '').slice(0, 600); props.rpa_signal = d.signal; props.automation_hiring = `${d.totalJobs} jobs; hiring: ${d.recentlyHiring ? 'yes' : 'no'}; RPA: ${(d.rpaTools || []).join(', ') || 'none'}`;\n  return [{ json: { dealId: d.dealId, body: { properties: props } } }];"
+      }
+    },
+    {
+      "id": "A_n11",
+      "name": "A) HubSpot — update deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2500,
+        200
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/deals/{{ $json.dealId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "A_n12",
+      "name": "A) Build draft request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('A) Propose time').first().json; const p = ctx.prospect || {}; const wh = $('A) Webhook — reply').first().json.body || {};\n  const timeLine = ctx.hasTime ? `Propose this exact time: ${ctx.proposed}. Keep the booking detail itself for the email confirmation.` : `They did NOT propose a time — ask for 2–3 windows that suit them, make it easy.`;\n  const system = `You draft a short reply on behalf of Tomáš Beneš, Co-founder at Duvo, to a prospect who replied positively via ${ctx.channel}. ${timeLine} Match their brevity, no over-selling, acknowledge a cc'd person if any. Output ONLY the message body.`;\n  const user = `PROSPECT: ${p.name}, ${p.title} at ${p.company}\\nCHANNEL: ${ctx.channel}\\n\\nTHEIR REPLY:\\n\"\"\"\\n${wh.replyText}\\n\"\"\"`;\n  return [{ json: { body: { model: 'claude-sonnet-4-6', max_tokens: 500, temperature: 0.4, system, messages: [{ role: 'user', content: user }] } } }];"
+      }
+    },
+    {
+      "id": "A_n13",
+      "name": "A) Anthropic — draft reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2940,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "A_n14",
+      "name": "A) Assemble card payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3160,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const resp = $json; const draft = ((resp.content && resp.content[0] && resp.content[0].text) || '').trim();\n  const ctx = $('A) Propose time').first().json; const t = ctx.triage || {};\n  return [{ json: {\n    status: 'ready_for_approval', dealId: ctx.dealId, channel: ctx.channel,\n    category: t.category, confidence: t.confidence,\n    account_tier: ctx.signal, automation_stack: ctx.stack, automation_summary: ctx.summary,\n    proposed_time: ctx.proposed, proposed_time_iso: ctx.proposedISO, has_time: ctx.hasTime, time_note: ctx.note,\n    prospect: ctx.prospect, reply_text: ($('A) Webhook — reply').first().json.body || {}).replyText,\n    draft, signals: t.meddpicc_signals,\n  } }];"
+      }
+    },
+    {
+      "id": "A_n15",
+      "name": "A) Build Slack card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const c = $json; const p = c.prospect || {};\n  const tierEmoji = { hot: '🟢', warm: '🟡', cold: '⚪' }[c.account_tier] || '⚪';\n  const chanEmoji = { email: '✉️', linkedin: '💼', whatsapp: '📱' }[c.channel] || '✉️';\n  const tierUp = String(c.account_tier || '').toUpperCase();\n  const btnValue = JSON.stringify({ dealId: c.dealId, channel: c.channel, proposedISO: c.proposed_time_iso, email: p.email, name: p.name, company: p.company, draft: (c.draft || '').slice(0, 800) });\n  const blocks = [\n    { type: 'header', text: { type: 'plain_text', text: `${tierEmoji} ${tierUp} · ${c.category} · ${Math.round((c.confidence || 0) * 100)}%`, emoji: true } },\n    { type: 'section', fields: [\n      { type: 'mrkdwn', text: `*Account*\\n${p.company || ''}` },\n      { type: 'mrkdwn', text: `*Contact*\\n${p.name || ''} — ${p.title || ''}` },\n      { type: 'mrkdwn', text: `*Reply channel*\\n${chanEmoji} ${c.channel}` },\n      { type: 'mrkdwn', text: c.has_time ? `*Proposed time*\\n${c.proposed_time}` : `*Proposed time*\\n⚠️ none requested` } ] },\n    { type: 'section', text: { type: 'mrkdwn', text: `*${tierEmoji} Account tier (Sumble): ${tierUp}*\\n${c.automation_summary || ''}` } },\n    { type: 'divider' },\n    { type: 'section', text: { type: 'mrkdwn', text: `*📨 Their reply*\\n>${String(c.reply_text || '').replace(/\\n/g, '\\n>')}` } },\n    { type: 'section', text: { type: 'mrkdwn', text: `*✍️ Drafted reply*\\n${c.draft || ''}` } } ];\n  if (c.has_time) {\n    blocks.push({ type: 'actions', elements: [\n      { type: 'button', text: { type: 'plain_text', text: '✅ Accept & send proposed time', emoji: true }, style: 'primary', action_id: 'accept_send', value: btnValue },\n      { type: 'button', text: { type: 'plain_text', text: '✏️ Edit → lemlist', emoji: true }, action_id: 'edit_lemlist', value: btnValue } ] });\n  } else {\n    blocks.push({ type: 'actions', elements: [ { type: 'button', text: { type: 'plain_text', text: '✏️ Handle in lemlist', emoji: true }, action_id: 'edit_lemlist', value: btnValue } ] });\n    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '⚠️ No time requested — AE proposes one manually.' }] });\n  }\n  return [{ json: { channel: 'YOUR_SLACK_CHANNEL_ID', text: `New ${c.account_tier} reply — ${p.company || ''}`, blocks } }];"
+      }
+    },
+    {
+      "id": "A_n16",
+      "name": "A) Slack — post card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3600,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "A_n17",
+      "name": "A) Build triage notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        440
+      ],
+      "parameters": {
+        "jsCode": "const c = $json; const t = c.triage || {}; const cat = t.category || '';\n  if (cat === 'auto_reply') return [];\n  const p = c.prospect || {};\n  const emoji = { objection: '🟠', referral: '🔄', not_interested: '🔴', unsubscribe: '⛔' }[cat] || 'ℹ️';\n  const s = t.meddpicc_signals || {};\n  const sig = [s.pain, s.competitor, s.timeline].filter(Boolean).join('  ·  ');\n  const wh = $('A) Webhook — reply').first().json.body || {};\n  const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: emoji + ' *' + cat.replace(/_/g, ' ') + '* · ' + (p.company || '') + ' — ' + (p.name || '') + ' (' + (c.channel || '') + ')' } }];\n  if (t.reasoning) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: t.reasoning }] });\n  if (sig) blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: sig }] });\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: 'Their message: ' + String(wh.replyText || '').slice(0, 320) } });\n  if (cat === 'unsubscribe') blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '⛔ Suppress — do not re-sequence.' }] });\n  return [{ json: { channel: 'YOUR_SLACK_CHANNEL_ID', text: cat + ' — ' + (p.company || ''), blocks } }];"
+      }
+    },
+    {
+      "id": "A_n18",
+      "name": "A) Slack — triage notice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1620,
+        440
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "H_n0",
+      "name": "H) Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        788
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 1000,
+        "height": 320,
+        "content": "## Reply Intelligence — Slack interactivity handler\nSlack button → parse → **ACCEPT**: create HubSpot meeting (→ morning-of) + associate to deal + lemlist channel-aware send + ✅ react on the card + threaded confirmation. **EDIT**: ✏️ react + threaded \"handling in lemlist\".\n\nThe original card stays put; state shows as a reaction + an in-thread reply. Webhook = Slack Interactivity Request URL."
+      }
+    },
+    {
+      "id": "H_n1",
+      "name": "H) Webhook — Slack action",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        300,
+        1120
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-action",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "slack-action"
+    },
+    {
+      "id": "H_n2",
+      "name": "H) Parse action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        1120
+      ],
+      "parameters": {
+        "jsCode": "const body = $json.body || {};\n  let payload = body.payload;\n  if (typeof payload === 'string') { try { payload = JSON.parse(payload); } catch (e) { payload = {}; } }\n  const action = (payload.actions && payload.actions[0]) || {};\n  let val = {}; try { val = JSON.parse(action.value || '{}'); } catch (e) {}\n  return [{ json: { action_id: action.action_id || '', val, userName: (payload.user && (payload.user.username || payload.user.name)) || 'AE', channelId: (payload.channel && payload.channel.id) || '', messageTs: (payload.message && payload.message.ts) || '' } }];"
+      }
+    },
+    {
+      "id": "H_n3",
+      "name": "H) Accept?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        740,
+        1120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.action_id }}",
+              "rightValue": "accept_send",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "H_n4",
+      "name": "H) Build meeting",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1000
+      ],
+      "parameters": {
+        "jsCode": "const v = $('H) Parse action').first().json.val || {};\n  const start = v.proposedISO ? new Date(v.proposedISO).getTime() : Date.now();\n  const end = start + 30 * 60000;\n  return [{ json: { dealId: v.dealId, channel: v.channel || 'email', email: v.email, name: v.name, company: v.company, draft: v.draft, proposed: v.proposedISO,\n    body: { properties: { hs_meeting_title: `Duvo intro — ${v.company || v.name || 'prospect'}`, hs_timestamp: v.proposedISO || new Date(start).toISOString(), hs_meeting_start_time: v.proposedISO || new Date(start).toISOString(), hs_meeting_end_time: new Date(end).toISOString(), hs_meeting_outcome: 'SCHEDULED' } } } }];"
+      }
+    },
+    {
+      "id": "H_n5",
+      "name": "H) HubSpot — create meeting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1180,
+        1000
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/meetings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "H_n6",
+      "name": "H) HubSpot — associate deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1400,
+        1000
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.hubapi.com/crm/v4/objects/meetings/{{ $json.id }}/associations/default/deals/{{ $('H) Build meeting').first().json.dealId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {}
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "H_n7",
+      "name": "H) Build lemlist send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1620,
+        1000
+      ],
+      "parameters": {
+        "jsCode": "const m = $('H) Build meeting').first().json;\n  const content = (m.draft || `Hi ${m.name || ''}, confirming our time — I'll send the calendar invite to your email.`);\n  return [{ json: { channel: m.channel || 'email', body: { email: m.email, content, sendUserId: 'YOUR_LEMLIST_USER_ID' } } }];"
+      }
+    },
+    {
+      "id": "H_n8",
+      "name": "H) lemlist — send",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1840,
+        1000
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.lemlist.com/api/inbox/{{ $json.channel }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "lemlistApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "lemlistApi": {
+          "id": "YOUR_LEMLIST_CREDENTIAL_ID",
+          "name": "lemlist — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "H_n9",
+      "name": "H) Build accept replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        1000
+      ],
+      "parameters": {
+        "jsCode": "const p = $('H) Parse action').first().json; const m = $('H) Build meeting').first().json;\n  const when = m.proposed ? new Date(m.proposed).toLocaleString('en-GB', { timeZone: 'Europe/Prague', dateStyle: 'medium', timeStyle: 'short' }) : 'the proposed time';\n  return [{ json: {\n    reaction: { channel: p.channelId, timestamp: p.messageTs, name: 'white_check_mark' },\n    thread: { channel: p.channelId, thread_ts: p.messageTs, text: `Accepted by <@${p.userName}>`,\n      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `✅ *Accepted by <@${p.userName}>* — booked *${when}*.\\nConfirmation sent via *${m.channel}*, booking detail to email · HubSpot meeting created (→ morning-of brief).` } }] } } }];"
+      }
+    },
+    {
+      "id": "H_n10",
+      "name": "H) Slack — react ✅",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2280,
+        1000
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/reactions.add",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.reaction }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "H_n11",
+      "name": "H) Slack — thread reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2500,
+        1000
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('H) Build accept replies').first().json.thread }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "H_n12",
+      "name": "H) Build edit replies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1280
+      ],
+      "parameters": {
+        "jsCode": "const p = $('H) Parse action').first().json; const v = p.val || {};\n  return [{ json: {\n    reaction: { channel: p.channelId, timestamp: p.messageTs, name: 'pencil2' },\n    thread: { channel: p.channelId, thread_ts: p.messageTs, text: `Editing in lemlist`,\n      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `✏️ *<@${p.userName}> is handling this in lemlist* — open the conversation for *${v.name || ''}*, edit the reply, and send.` } }] } } }];"
+      }
+    },
+    {
+      "id": "H_n13",
+      "name": "H) Slack — react ✏️",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1180,
+        1280
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/reactions.add",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.reaction }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "H_n14",
+      "name": "H) Slack — thread reply (edit)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1400,
+        1280
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('H) Build edit replies').first().json.thread }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "S_n0",
+      "name": "S) Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        1608
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 1000,
+        "height": 300,
+        "content": "## Reply Intelligence — Morning-of scheduler (Trigger B clock)\nDaily 07:00 (+ a test webhook) → find HubSpot meetings starting TODAY → get the associated deal → POST its dealId to the Trigger B webhook → Sumble+Exa brief → Slack.\n\nThis is the time-trigger that makes Trigger B fire only for meetings that actually happen. Meetings are created by the Slack [Accept] handler."
+      }
+    },
+    {
+      "id": "S_n1",
+      "name": "S) Schedule — daily 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        300,
+        1840
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "S_n2",
+      "name": "S) Webhook — run now (test)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        300,
+        2020
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "run-morning-briefs",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "run-morning-briefs"
+    },
+    {
+      "id": "S_n3",
+      "name": "S) Build meeting search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        1930
+      ],
+      "parameters": {
+        "jsCode": "const start = $now.setZone('Europe/Prague').startOf('day').toMillis();\n  const end = $now.setZone('Europe/Prague').endOf('day').toMillis();\n  return [{ json: { body: { filterGroups: [{ filters: [{ propertyName: 'hs_meeting_start_time', operator: 'BETWEEN', value: String(start), highValue: String(end) }] }], properties: ['hs_meeting_title', 'hs_meeting_start_time'], limit: 50 } } }];"
+      }
+    },
+    {
+      "id": "S_n4",
+      "name": "S) HubSpot — meetings today",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        760,
+        1930
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/meetings/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}"
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "S_n5",
+      "name": "S) Extract meetings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        1930
+      ],
+      "parameters": {
+        "jsCode": "const results = ($json.results) || [];\n  if (!results.length) return [{ json: { _empty: true } }];\n  return results.map((r) => ({ json: { meetingId: r.id, title: (r.properties || {}).hs_meeting_title } }));"
+      }
+    },
+    {
+      "id": "S_n6",
+      "name": "S) HubSpot — deal of meeting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1200,
+        1930
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.hubapi.com/crm/v3/objects/meetings/{{ $json.meetingId }}/associations/deals",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {}
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "S_n7",
+      "name": "S) Extract dealId",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1420,
+        1930
+      ],
+      "parameters": {
+        "jsCode": "const assoc = ($json.results) || [];\n  const dealId = assoc.length ? (assoc[0].toObjectId || assoc[0].id) : '';\n  const ctx = $('S) Extract meetings').all()[$itemIndex] ? $('S) Extract meetings').all()[$itemIndex].json : {};\n  return [{ json: { dealId: String(dealId || ''), meetingId: ctx.meetingId } }];"
+      }
+    },
+    {
+      "id": "S_n8",
+      "name": "S) Fire Trigger B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1640,
+        1930
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/brief-native",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { dealId: $json.dealId } }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n0",
+      "name": "B) Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        2428
+      ],
+      "parameters": {
+        "color": 5,
+        "width": 1100,
+        "height": 340,
+        "content": "## Reply Intelligence — Trigger B (Sumble account intelligence + native Exa)\nPOST {dealId} → HubSpot deal → resolve domain → **Sumble enrich** (automation/RPA stack + hiring) → score RPA signal → Claude 3 Exa queries → native Exa ×3 → Claude brief (leads with the automation stack) → write brief + automation_stack + rpa_signal to the deal.\n\nFor Duvo: Sumble surfaces the post-RPA-disillusionment signal with hard numbers (e.g. Ahold = Automation Anywhere + Blue Prism + UiPath, 14 AA job posts). All keys in encrypted creds."
+      }
+    },
+    {
+      "id": "B_n1",
+      "name": "B) Webhook — trigger B",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        300,
+        2760
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "brief-native",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "brief-native"
+    },
+    {
+      "id": "B_n2",
+      "name": "B) HubSpot — get deal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        520,
+        2760
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.hubapi.com/crm/v3/objects/deals/{{ $json.body.dealId }}?properties=dealname,prospect_company,prospect_name,prospect_title,prospect_email,meddpicc_pain,meddpicc_competitor,meddpicc_champion,meddpicc_timeline,meddpicc_decision_process",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {}
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n3",
+      "name": "B) Resolve domain",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const deal = $('B) HubSpot — get deal').first().json; const props = deal.properties || {};\n  const email = props.prospect_email || ''; let domain = email.includes('@') ? email.split('@')[1].trim().toLowerCase() : '';\n  const company = (props.prospect_company || '').toLowerCase().trim();\n  const map = { 'ahold delhaize': 'aholddelhaize.com', 'henkel': 'henkel.com', 'unilever': 'unilever.com', 'reckitt': 'reckitt.com', 'tesco': 'tesco.com' };\n  if (!domain || domain.startsWith('example')) domain = map[company] || (company.replace(/[^a-z0-9]/g, '') + '.com');\n  const technologies = ['uipath', 'blue-prism', 'automation-anywhere', 'pega', 'workfusion', 'nice-rpa', 'celonis', 'sap', 'microsoft-power-automate', 'servicenow'];\n  return [{ json: { dealId: deal.id, company: props.prospect_company || '', domain, props, sumbleBody: { organization: { domain }, filters: { technologies } } } }];"
+      }
+    },
+    {
+      "id": "B_n4",
+      "name": "B) Sumble — enrich",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        960,
+        2760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sumble.com/v6/organizations/enrich",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sumbleBody }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YOUR_SUMBLE_CREDENTIAL_ID",
+          "name": "Sumble Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n5",
+      "name": "B) Score automation signal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const enrich = $json || {}; const techs = Array.isArray(enrich.technologies) ? enrich.technologies : [];\n  const rpaSet = ['UiPath', 'Blue Prism', 'Automation Anywhere', 'Pega', 'WorkFusion', 'NICE RPA', 'AutomationEdge'];\n  const rpaTools = techs.filter((t) => rpaSet.indexOf(t.name) >= 0);\n  const totalJobs = techs.reduce((n, t) => n + (t.jobs_count || 0), 0);\n  const recentlyHiring = techs.some((t) => t.last_job_post && String(t.last_job_post) >= '2025-01-01');\n  let signal = 'cold';\n  if (rpaTools.length >= 2 || (rpaTools.length >= 1 && recentlyHiring)) signal = 'hot';\n  else if (rpaTools.length >= 1 || techs.length >= 1) signal = 'warm';\n  const stack = enrich.technologies_found || techs.map((t) => t.name).join(', ') || 'none found';\n  const summary = `Stack: ${stack}. RPA platforms: ${rpaTools.map((t) => t.name).join(', ') || 'none'}. Automation job posts: ${totalJobs} (recently hiring: ${recentlyHiring ? 'yes' : 'no'}).`;\n  const ctx = $('B) Resolve domain').first().json;\n  return [{ json: { dealId: ctx.dealId, company: ctx.company, domain: ctx.domain, props: ctx.props, signal, rpaTools: rpaTools.map((t) => t.name), totalJobs, recentlyHiring, stack, summary } }];"
+      }
+    },
+    {
+      "id": "B_n6",
+      "name": "B) Build queries request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('B) Score automation signal').first().json; const props = ctx.props || {};\n  const company = props.prospect_company || ctx.company || ''; const contactName = props.prospect_name || ''; const contactTitle = props.prospect_title || '';\n  const signals = { pain: props.meddpicc_pain, competitor: props.meddpicc_competitor, timeline: props.meddpicc_timeline, decision_process: props.meddpicc_decision_process };\n  const system = `Generate exactly 3 Exa semantic search queries to prep a rep for a call with ${contactName} (${contactTitle}) at ${company}. Q1 the account's recent strategic initiative/news. Q2 the persona's background. Q3 the specific signal — fold in their automation/RPA footprint where relevant: ${ctx.summary}. Return ONLY a JSON array of exactly 3 objects {\"intent\":string,\"query\":string}.`;\n  const user = `ACCOUNT: ${company}\\nPERSONA: ${contactName}, ${contactTitle}\\nMEDDPICC: pain=${signals.pain || '-'}; competitor=${signals.competitor || '-'}\\nSUMBLE: ${ctx.summary} (rpa_signal=${ctx.signal})`;\n  return [{ json: { dealId: ctx.dealId, company, contactName, contactTitle, signals, body: { model: 'claude-sonnet-4-6', max_tokens: 600, temperature: 0, system, messages: [{ role: 'user', content: user }] } } }];"
+      }
+    },
+    {
+      "id": "B_n7",
+      "name": "B) Anthropic — Exa queries",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1620,
+        2760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n8",
+      "name": "B) Parse queries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const resp = $json; const text = (resp.content && resp.content[0] && resp.content[0].text) || '';\n  function extract(t) { try { return JSON.parse(t); } catch (e) {} const a = t.indexOf('['); const b = t.lastIndexOf(']'); if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1)); throw new Error('no json'); }\n  let arr; try { arr = extract(text); } catch (e) { arr = []; }\n  const ctx = $('B) Build queries request').first().json;\n  return arr.slice(0, 3).map((q) => ({ json: { intent: q.intent, query: q.query, dealId: ctx.dealId } }));"
+      }
+    },
+    {
+      "id": "B_n9",
+      "name": "B) Exa search",
+      "type": "n8n-nodes-exa-official.exa",
+      "typeVersion": 1,
+      "position": [
+        2060,
+        2760
+      ],
+      "parameters": {
+        "resource": "search",
+        "operation": "search",
+        "query": "={{ $json.query }}"
+      },
+      "credentials": {
+        "exaApi": {
+          "id": "YOUR_EXA_CREDENTIAL_ID",
+          "name": "Exa — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n10",
+      "name": "B) Aggregate Exa + build brief request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const exaRuns = $('B) Exa search').all(); const queries = $('B) Parse queries').all(); const ctx = $('B) Build queries request').first().json; const sig = $('B) Score automation signal').first().json;\n  const results = exaRuns.map((r, i) => {\n    const data = r.json || {}; const q = queries[i] ? queries[i].json : {};\n    const items = (data.results || []).slice(0, 5).map((x) => ({ title: x.title || x.url, url: x.url, highlights: (x.highlights || []).slice(0, 2), text: (x.text || '').slice(0, 500) }));\n    return { intent: q.intent, query: q.query, results: items };\n  });\n  const total = results.reduce((n, r) => n + r.results.length, 0);\n  const block = results.map((qr, i) => {\n    const its = qr.results.length ? qr.results.map((r, j) => `[${i + 1}.${j + 1}] ${r.title}\\n  ${r.url}\\n  ${(r.highlights || []).join(' … ')}\\n  ${r.text}`).join('\\n') : '(no results)';\n    return `QUERY ${i + 1} — ${qr.intent}\\n\"${qr.query}\"\\n${its}`;\n  }).join('\\n\\n');\n  const system = `Write a pre-meeting brief for a call with ${ctx.contactName} (${ctx.contactTitle}) at ${ctx.company}. Return ONLY JSON: {\"brief_paragraph\":\"<=120 words\",\"discovery_framework\":[\"5 questions keyed to THIS prospect\"],\"sources\":[{\"title\":string,\"url\":string}],\"meddpicc_updates\":{\"metrics\":string|null,\"economic_buyer\":string|null,\"decision_criteria\":string|null,\"competition\":string|null},\"evidence_quality\":\"strong\"|\"thin\"}. Lead with the SUMBLE TECHNOGRAPHICS — for Duvo (retail-ops automation) the existing RPA/automation stack + hiring momentum is the key qualifier; name the specific tools and what it implies. Use Exa for news/persona. Up to 3 real sources. If thin, say so — never fabricate.`;\n  const user = `ACCOUNT: ${ctx.company}\\nPERSONA: ${ctx.contactName}, ${ctx.contactTitle}\\nMEDDPICC: ${JSON.stringify(ctx.signals)}\\n\\nSUMBLE TECHNOGRAPHICS (structured, high-signal): ${sig.summary}\\nRPA signal: ${sig.signal}\\n\\nEXA RESULTS (${total}):\\n${block}`;\n  return [{ json: { dealId: ctx.dealId, company: ctx.company, total, body: { model: 'claude-sonnet-4-6', max_tokens: 1600, temperature: 0, system, messages: [{ role: 'user', content: user }] } } }];"
+      },
+      "executeOnce": true
+    },
+    {
+      "id": "B_n11",
+      "name": "B) Anthropic — synthesize brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2500,
+        2760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n12",
+      "name": "B) Parse brief + build HubSpot update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const resp = $json; const text = (resp.content && resp.content[0] && resp.content[0].text) || '';\n  function extract(t) { try { return JSON.parse(t); } catch (e) {} const a = t.indexOf('{'); const b = t.lastIndexOf('}'); if (a >= 0 && b > a) return JSON.parse(t.slice(a, b + 1)); throw new Error('no json'); }\n  let brief; try { brief = extract(text); } catch (e) { brief = { brief_paragraph: 'parse error', discovery_framework: [], sources: [], meddpicc_updates: {}, evidence_quality: 'thin' }; }\n  const ctx = $('B) Aggregate Exa + build brief request').first().json; const sig = $('B) Score automation signal').first().json; const u = brief.meddpicc_updates || {};\n  const briefText = `PRE-MEETING BRIEF · evidence: ${brief.evidence_quality} · rpa_signal: ${sig.signal}\\n\\n${brief.brief_paragraph}\\n\\nAutomation stack (Sumble): ${sig.summary}\\n\\nDiscovery questions:\\n` + (brief.discovery_framework || []).map((q, i) => `  ${i + 1}. ${q}`).join('\\n') + `\\n\\nSources:\\n` + (brief.sources || []).map((s, i) => `  ${i + 1}. ${s.title} — ${s.url}`).join('\\n');\n  const props = { pre_meeting_brief: briefText, evidence_quality: brief.evidence_quality, automation_stack: String(sig.stack || '').slice(0, 600), rpa_signal: sig.signal, automation_hiring: `${sig.totalJobs} automation job posts; recently hiring: ${sig.recentlyHiring ? 'yes' : 'no'}; RPA: ${(sig.rpaTools || []).join(', ') || 'none'}` };\n  if (u.metrics) props.meddpicc_metrics = String(u.metrics);\n  if (u.economic_buyer) props.meddpicc_economic_buyer = String(u.economic_buyer);\n  if (u.decision_criteria) props.meddpicc_decision_criteria = String(u.decision_criteria);\n  if (u.competition) props.meddpicc_competition = String(u.competition);\n  return [{ json: { dealId: ctx.dealId, brief, signal: sig.signal, stack: sig.stack, body: { properties: props } } }];"
+      }
+    },
+    {
+      "id": "B_n13",
+      "name": "B) HubSpot — write brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2940,
+        2760
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/deals/{{ $json.dealId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}"
+      },
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "YOUR_HUBSPOT_CREDENTIAL_ID",
+          "name": "HubSpot — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_n14",
+      "name": "B) Assemble result B",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3160,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('B) Parse brief + build HubSpot update').first().json;\n  return [{ json: { status: 'briefed', dealId: ctx.dealId, rpa_signal: ctx.signal, automation_stack: ctx.stack, evidence_quality: ctx.brief.evidence_quality, brief: ctx.brief } }];"
+      }
+    },
+    {
+      "id": "B_n15",
+      "name": "B) Build brief card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const pb = $('B) Parse brief + build HubSpot update').first().json; const brief = pb.brief || {};\nconst sig = $('B) Score automation signal').first().json; const q = $('B) Build queries request').first().json;\nconst tierEmoji = { hot: '🟢', warm: '🟡', cold: '⚪' }[sig.signal] || '⚪';\nconst first = String(brief.brief_paragraph || '').split('. ')[0];\nconst hook = first ? (/[.!?]$/.test(first) ? first : first + '.') : '';\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: '📋 Pre-meeting brief · ' + (q.company || sig.company || ''), emoji: true } },\n  { type: 'section', text: { type: 'mrkdwn', text: '*' + (q.contactName || '') + '* — ' + (q.contactTitle || '') + '  ·  ' + tierEmoji + ' *' + String(sig.signal || '').toUpperCase() + '*  ·  evidence ' + (brief.evidence_quality || 'n/a') } } ];\nif (hook) blocks.push({ type: 'section', text: { type: 'mrkdwn', text: hook } });\nblocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '📎 Full one-pager — angle, ' + ((brief.discovery_framework || []).length) + ' discovery questions, stack & sources — attached below.' }] });\nreturn [{ json: { channel: 'YOUR_SLACK_CHANNEL_ID', text: 'Pre-meeting brief — ' + (q.company || ''), blocks: blocks } }];"
+      }
+    },
+    {
+      "id": "B_n16",
+      "name": "B) Slack — post brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3600,
+        2760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1500,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_b_buildonepagerp",
+      "name": "B) Build one-pager PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3830,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "function makeBriefPdf(d) {\n  const W = 595, H = 842, ML = 45, MR = 45, usable = W - ML - MR;\n  // transliterate to ASCII (Helvetica-safe; avoids garbled diacritics in a demo). ASCII-only source.\n  const ascii = (s) => String(s == null ? '' : s).normalize('NFKD').split('').map(function (ch) { var c = ch.charCodeAt(0); if (c >= 768 && c <= 879) return ''; if (c === 8216 || c === 8217) return \"'\"; if (c === 8220 || c === 8221) return '\"'; if ((c >= 8208 && c <= 8213) || c === 8722) return '-'; if (c === 8364) return 'EUR'; if (c < 32 || c > 126) return ''; return ch; }).join('')\n  const esc = (s) => ascii(s).replace(/\\\\/g, '\\\\\\\\').replace(/\\(/g, '\\\\(').replace(/\\)/g, '\\\\)');\n  const wrap = (s, max) => { const w = ascii(s).split(/\\s+/); const out = []; let cur = '';\n    for (const t of w) { if ((cur + ' ' + t).trim().length > max) { if (cur) out.push(cur); cur = t; } else cur = (cur + ' ' + t).trim(); }\n    if (cur) out.push(cur); return out.length ? out : ['']; };\n\n  let s = '';                                  // content stream\n  const rect = (x, y, w, h, r, g, b) => { s += `q ${r} ${g} ${b} rg ${x} ${y} ${w} ${h} re f Q\\n`; };\n  const text = (x, y, size, bold, str, rgb) => { const c = rgb || [0, 0, 0];\n    s += `BT /F${bold ? 2 : 1} ${size} Tf ${c[0]} ${c[1]} ${c[2]} rg 1 0 0 1 ${x} ${y} Tm (${esc(str)}) Tj ET\\n`; };\n  let y = H - 64;\n  const para = (str, size, bold, max, lead, rgb) => { for (const ln of wrap(str, max)) { text(ML, y, size, bold, ln, rgb); y -= lead; } };\n\n  // header bar\n  rect(0, H - 52, W, 52, 0.11, 0.14, 0.19);\n  text(ML, H - 34, 17, true, 'DUVO   -   Pre-meeting brief', [1, 1, 1]);\n  text(W - MR - 150, H - 33, 9, false, ascii(d.dateLabel || ''), [0.75, 0.8, 0.85]);\n  y = H - 78;\n  // account line\n  text(ML, y, 14, true, `${d.company || ''}`); y -= 18;\n  text(ML, y, 10.5, false, `${d.contactName || ''} - ${d.contactTitle || ''}`, [0.25, 0.25, 0.25]); y -= 22;\n  // signal chip row\n  const tierTxt = `ACCOUNT SIGNAL:  ${String(d.tier || '').toUpperCase()}`;\n  text(ML, y, 11, true, tierTxt, d.tier === 'hot' ? [0.0, 0.5, 0.2] : d.tier === 'warm' ? [0.7, 0.5, 0] : [0.4, 0.4, 0.4]); y -= 15;\n  para(`Stack (Sumble): ${d.stack || 'n/a'}`, 9.5, false, 100, 13, [0.3, 0.3, 0.3]); y -= 8;\n  // divider\n  rect(ML, y, usable, 0.8, 0.8, 0.8, 0.8); y -= 20;\n  // angle\n  text(ML, y, 11, true, 'THE ANGLE'); y -= 16;\n  para(d.angle || '', 10.5, false, 95, 14.5); y -= 12;\n  // discovery questions\n  text(ML, y, 11, true, 'DISCOVERY QUESTIONS'); y -= 16;\n  (d.questions || []).forEach((q, i) => { const ls = wrap(`${i + 1}.  ${q}`, 92);\n    ls.forEach((ln, j) => { text(ML + (j ? 14 : 0), y, 10.5, false, ln); y -= 14; }); y -= 2; });\n  y -= 8;\n  // sources\n  text(ML, y, 11, true, 'SOURCES'); y -= 16;\n  (d.sources || []).forEach((src) => { para(`-  ${src.title || src.url}  (${src.url})`, 9, false, 110, 12.5, [0.2, 0.35, 0.6]); });\n  // footer\n  rect(ML, 46, usable, 0.8, 0.85, 0.85, 0.85);\n  text(ML, 33, 8.5, false, `Evidence quality: ${d.evidence || 'n/a'}    -    Generated by Reply Intelligence    -    Human-in-the-loop: drafts never auto-send`, [0.5, 0.5, 0.5]);\n\n  // assemble PDF objects with a correct xref\n  const objs = [];\n  objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';\n  objs[2] = '<< /Type /Pages /Kids [3 0 R] /Count 1 >>';\n  objs[3] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>`;\n  objs[4] = `<< /Length ${Buffer.byteLength(s, 'latin1')} >>\\nstream\\n${s}endstream`;\n  objs[5] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';\n  objs[6] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';\n  let pdf = '%PDF-1.4\\n'; const off = [];\n  for (let i = 1; i <= 6; i++) { off[i] = Buffer.byteLength(pdf, 'latin1'); pdf += `${i} 0 obj\\n${objs[i]}\\nendobj\\n`; }\n  const xrefAt = Buffer.byteLength(pdf, 'latin1');\n  pdf += `xref\\n0 7\\n0000000000 65535 f \\n`;\n  for (let i = 1; i <= 6; i++) pdf += `${String(off[i]).padStart(10, '0')} 00000 n \\n`;\n  pdf += `trailer\\n<< /Size 7 /Root 1 0 R >>\\nstartxref\\n${xrefAt}\\n%%EOF`;\n  return pdf;\n}\n\nconst pb = $('B) Parse brief + build HubSpot update').first().json; const brief = pb.brief || {};\nconst sig = $('B) Score automation signal').first().json; const q = $('B) Build queries request').first().json;\nlet postTs = ''; try { postTs = $('B) Slack — post brief').first().json.ts || ''; } catch (e) {}\nconst d = { company: q.company || sig.company || '', contactName: q.contactName || '', contactTitle: q.contactTitle || '', dateLabel: '', tier: sig.signal || 'cold', stack: (sig.summary || '').replace(/^Stack:\\s*/, ''), angle: brief.brief_paragraph || '', questions: brief.discovery_framework || [], sources: (brief.sources || []).map(function (s) { return { title: s.title, url: s.url }; }), evidence: brief.evidence_quality || 'n/a' };\nconst pdf = makeBriefPdf(d);\nconst fileName = 'brief-' + String(d.company || 'account').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() + '.pdf';\nreturn [{ json: { channel: 'YOUR_SLACK_CHANNEL_ID', thread_ts: postTs, fileName: fileName, length: Buffer.byteLength(pdf, 'latin1'), initial_comment: '📎 One-pager attached.' }, binary: { data: { data: Buffer.from(pdf, 'latin1').toString('base64'), mimeType: 'application/pdf', fileName: fileName } } }];"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_b_slackgetupload",
+      "name": "B) Slack — get upload URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4060,
+        2760
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://slack.com/api/files.getUploadURLExternal?filename={{ $json.fileName }}&length={{ $json.length }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_b_attachpdfbinar",
+      "name": "B) Attach PDF binary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4290,
+        2760
+      ],
+      "parameters": {
+        "jsCode": "const u = $json; const src = $('B) Build one-pager PDF').first(); const j = src.json;\nconst complete = { files: [{ id: u.file_id, title: j.fileName }], channel_id: j.channel, initial_comment: j.initial_comment };\nif (j.thread_ts) complete.thread_ts = j.thread_ts;\nreturn [{ json: { upload_url: u.upload_url, file_id: u.file_id, complete: complete }, binary: src.binary }];"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_b_uploadbytes",
+      "name": "B) Slack — upload bytes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4520,
+        2760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.upload_url }}",
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "B_b_slackcompleteu",
+      "name": "B) Slack — complete upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4750,
+        2760
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/files.completeUploadExternal",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('B) Attach PDF binary').first().json.complete }}"
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "YOUR_SLACK_CREDENTIAL_ID",
+          "name": "Slack — Reply Intel"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "master_title",
+      "name": "★ System overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -460
+      ],
+      "parameters": {
+        "color": 4,
+        "width": 1180,
+        "height": 360,
+        "content": "# 🧠 Reply Intelligence System — 4 triggers, 1 workflow\nHuman-in-the-loop reply automation for outbound. Drafts are **never auto-sent** — the AE approves in Slack.\n\n**A) Reply received** *(webhook)* → Claude triage (7 paths) → Sumble account tier → propose time → Claude draft → Slack approval card\n**H) Slack action** *(button)* → Accept = HubSpot meeting + lemlist channel-aware send + ✅ react + thread confirm · Edit = ✏️ hand to lemlist\n**S) Morning scheduler** *(07:00 cron)* → find today's meetings → fire Trigger B per deal\n**B) Pre-meeting brief** → Sumble + Exa research → Claude brief → HubSpot + Slack\n\nEvery external call carries its **native credential** (Anthropic · HubSpot · lemlist · Slack · Sumble · Exa).\nHubSpot *meetings* & lemlist *inbox* have no native node → credentialed HTTP by necessity. Exa = native community node."
+      }
+    }
+  ],
+  "connections": {
+    "A) Webhook — reply": {
+      "main": [
+        [
+          {
+            "node": "A) Build triage request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Build triage request": {
+      "main": [
+        [
+          {
+            "node": "A) Anthropic — triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Anthropic — triage": {
+      "main": [
+        [
+          {
+            "node": "A) Parse triage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Parse triage": {
+      "main": [
+        [
+          {
+            "node": "A) Positive?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Positive?": {
+      "main": [
+        [
+          {
+            "node": "A) Resolve domain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "A) Build triage notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Resolve domain": {
+      "main": [
+        [
+          {
+            "node": "A) Sumble — enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Sumble — enrich": {
+      "main": [
+        [
+          {
+            "node": "A) Score automation signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Score automation signal": {
+      "main": [
+        [
+          {
+            "node": "A) Propose time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Propose time": {
+      "main": [
+        [
+          {
+            "node": "A) Build HubSpot update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Build HubSpot update": {
+      "main": [
+        [
+          {
+            "node": "A) HubSpot — update deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) HubSpot — update deal": {
+      "main": [
+        [
+          {
+            "node": "A) Build draft request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Build draft request": {
+      "main": [
+        [
+          {
+            "node": "A) Anthropic — draft reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Anthropic — draft reply": {
+      "main": [
+        [
+          {
+            "node": "A) Assemble card payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Assemble card payload": {
+      "main": [
+        [
+          {
+            "node": "A) Build Slack card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Build Slack card": {
+      "main": [
+        [
+          {
+            "node": "A) Slack — post card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A) Build triage notice": {
+      "main": [
+        [
+          {
+            "node": "A) Slack — triage notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Webhook — Slack action": {
+      "main": [
+        [
+          {
+            "node": "H) Parse action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Parse action": {
+      "main": [
+        [
+          {
+            "node": "H) Accept?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Accept?": {
+      "main": [
+        [
+          {
+            "node": "H) Build meeting",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "H) Build edit replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Build meeting": {
+      "main": [
+        [
+          {
+            "node": "H) HubSpot — create meeting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) HubSpot — create meeting": {
+      "main": [
+        [
+          {
+            "node": "H) HubSpot — associate deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) HubSpot — associate deal": {
+      "main": [
+        [
+          {
+            "node": "H) Build lemlist send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Build lemlist send": {
+      "main": [
+        [
+          {
+            "node": "H) lemlist — send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) lemlist — send": {
+      "main": [
+        [
+          {
+            "node": "H) Build accept replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Build accept replies": {
+      "main": [
+        [
+          {
+            "node": "H) Slack — react ✅",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Slack — react ✅": {
+      "main": [
+        [
+          {
+            "node": "H) Slack — thread reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Build edit replies": {
+      "main": [
+        [
+          {
+            "node": "H) Slack — react ✏️",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H) Slack — react ✏️": {
+      "main": [
+        [
+          {
+            "node": "H) Slack — thread reply (edit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) Schedule — daily 07:00": {
+      "main": [
+        [
+          {
+            "node": "S) Build meeting search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) Webhook — run now (test)": {
+      "main": [
+        [
+          {
+            "node": "S) Build meeting search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) Build meeting search": {
+      "main": [
+        [
+          {
+            "node": "S) HubSpot — meetings today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) HubSpot — meetings today": {
+      "main": [
+        [
+          {
+            "node": "S) Extract meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) Extract meetings": {
+      "main": [
+        [
+          {
+            "node": "S) HubSpot — deal of meeting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) HubSpot — deal of meeting": {
+      "main": [
+        [
+          {
+            "node": "S) Extract dealId",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S) Extract dealId": {
+      "main": [
+        [
+          {
+            "node": "S) Fire Trigger B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Webhook — trigger B": {
+      "main": [
+        [
+          {
+            "node": "B) HubSpot — get deal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) HubSpot — get deal": {
+      "main": [
+        [
+          {
+            "node": "B) Resolve domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Resolve domain": {
+      "main": [
+        [
+          {
+            "node": "B) Sumble — enrich",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Sumble — enrich": {
+      "main": [
+        [
+          {
+            "node": "B) Score automation signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Score automation signal": {
+      "main": [
+        [
+          {
+            "node": "B) Build queries request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Build queries request": {
+      "main": [
+        [
+          {
+            "node": "B) Anthropic — Exa queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Anthropic — Exa queries": {
+      "main": [
+        [
+          {
+            "node": "B) Parse queries",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Parse queries": {
+      "main": [
+        [
+          {
+            "node": "B) Exa search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Exa search": {
+      "main": [
+        [
+          {
+            "node": "B) Aggregate Exa + build brief request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Aggregate Exa + build brief request": {
+      "main": [
+        [
+          {
+            "node": "B) Anthropic — synthesize brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Anthropic — synthesize brief": {
+      "main": [
+        [
+          {
+            "node": "B) Parse brief + build HubSpot update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Parse brief + build HubSpot update": {
+      "main": [
+        [
+          {
+            "node": "B) HubSpot — write brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) HubSpot — write brief": {
+      "main": [
+        [
+          {
+            "node": "B) Assemble result B",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Assemble result B": {
+      "main": [
+        [
+          {
+            "node": "B) Build brief card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Build brief card": {
+      "main": [
+        [
+          {
+            "node": "B) Slack — post brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Slack — post brief": {
+      "main": [
+        [
+          {
+            "node": "B) Build one-pager PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Build one-pager PDF": {
+      "main": [
+        [
+          {
+            "node": "B) Slack — get upload URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Slack — get upload URL": {
+      "main": [
+        [
+          {
+            "node": "B) Attach PDF binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Attach PDF binary": {
+      "main": [
+        [
+          {
+            "node": "B) Slack — upload bytes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B) Slack — upload bytes": {
+      "main": [
+        [
+          {
+            "node": "B) Slack — complete upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "binaryMode": "separate"
+  }
+}

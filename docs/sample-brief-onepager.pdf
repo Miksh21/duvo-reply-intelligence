@@ -1,0 +1,84 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 5763 >>
+stream
+q 0.11 0.14 0.19 rg 0 790 595 52 re f Q
+BT /F2 17 Tf 1 1 1 rg 1 0 0 1 45 808 Tm (DUVO   -   Pre-meeting brief) Tj ET
+BT /F1 9 Tf 0.75 0.8 0.85 rg 1 0 0 1 400 809 Tm () Tj ET
+BT /F2 14 Tf 0 0 0 rg 1 0 0 1 45 764 Tm (Ahold Delhaize) Tj ET
+BT /F1 10.5 Tf 0.25 0.25 0.25 rg 1 0 0 1 45 746 Tm (Bram de Vries - Chief Commercial Officer) Tj ET
+BT /F2 11 Tf 0 0.5 0.2 rg 1 0 0 1 45 724 Tm (ACCOUNT SIGNAL:  HOT) Tj ET
+BT /F1 9.5 Tf 0.3 0.3 0.3 rg 1 0 0 1 45 709 Tm (Stack \(Sumble\): Stack: Automation Anywhere, Blue Prism, Celonis, Microsoft Power Automate, Pega,) Tj ET
+BT /F1 9.5 Tf 0.3 0.3 0.3 rg 1 0 0 1 45 696 Tm (SAP, ServiceNow, UiPath. RPA platforms: Automation Anywhere, Blue Prism, Pega, UiPath. Automation) Tj ET
+BT /F1 9.5 Tf 0.3 0.3 0.3 rg 1 0 0 1 45 683 Tm (job posts: 1090 \(recently hiring: yes\).) Tj ET
+q 0.8 0.8 0.8 rg 45 662 505 0.8 re f Q
+BT /F2 11 Tf 0 0 0 rg 1 0 0 1 45 642 Tm (THE ANGLE) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 626 Tm (Ahold Delhaize runs one of the most mature enterprise automation stacks in European retail -) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 611.5 Tm (Automation Anywhere \(65+ bots, 69K+ FTE hours saved in RBS/USA\), Blue Prism, UiPath, Pega,) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 597 Tm (Power Automate, layered on SAP and ServiceNow, with Celonis for process mining. 1,090 open) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 582.5 Tm (automation roles signals active scaling, not exploration. The Q3 pain around supplier) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 568 Tm (operations gaps lands directly in this stack: P2P/AP processes are already partially automated,) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 553.5 Tm (but Celonis process mining likely surfaced execution gaps between supplier touchpoints and RPA) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 539 Tm (coverage. As CCO, Bram de Vries owns commercial supplier relationships and the EUR3B) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 524.5 Tm (complementary income stream target - automation gaps in supplier ops are his margin and) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 510 Tm (velocity problem. Active vendor evaluation means Duvo must differentiate on outcomes, not) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 495.5 Tm (features.) Tj ET
+BT /F2 11 Tf 0 0 0 rg 1 0 0 1 45 469 Tm (DISCOVERY QUESTIONS) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 453 Tm (1. The Q3 review surfaced supplier operations gaps - were those gaps primarily in data) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 439 Tm (exchange and onboarding latency with suppliers, or in the internal workflows \(AP, inventory,) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 425 Tm (compliance\) that sit downstream of supplier interactions?) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 409 Tm (2. You're running Automation Anywhere, UiPath, Blue Prism, and Pega simultaneously - is that) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 395 Tm (intentional specialization by function, or has the stack grown organically and created) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 381 Tm (orchestration overhead that's slowing down new automation deployments in commercial ops?) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 365 Tm (3. Celonis is a strong signal that you're doing process mining - what did the mining surface) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 351 Tm (in supplier-facing workflows that existing RPA bots aren't covering, and is that the gap) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 337 Tm (that triggered this vendor evaluation?) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 321 Tm (4. The Growing Together strategy targets EUR5B in savings by 2028 and EUR3B in complementary) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 307 Tm (income streams - how much of the supplier operations gap is a cost-efficiency problem versus) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 293 Tm (a revenue-at-risk problem \(e.g., delayed supplier activations slowing retail media or) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 279 Tm (own-brand launches\)?) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 45 263 Tm (5. With 15,000+ direct suppliers and joint sourcing scaling across six European markets,) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 249 Tm (what does 'good' look like for supplier operations automation in 18 months - and what's the) Tj ET
+BT /F1 10.5 Tf 0 0 0 rg 1 0 0 1 59 235 Tm (internal benchmark you're using to evaluate vendors against each other?) Tj ET
+BT /F2 11 Tf 0 0 0 rg 1 0 0 1 45 211 Tm (SOURCES) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 195 Tm (- Ahold Delhaize RPA Case Study - Automation Anywhere \(RBS saves 69,000+ FTE hours\)) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 182.5 Tm (\(https://www.automationanywhere.com/resources/customer-stories/ahold\)) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 170 Tm (- Ahold Delhaize Growing Together Strategy - Annual Report 2025 \(EUR5B savings target, AI/automation in) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 157.5 Tm (supplier and back-office ops\)) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 145 Tm (\(https://aholddelhaize.com/digitalannualreport/2025/documents/Our-Growing-Together-strategy---annual-report-2025.pdf\)) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 132.5 Tm (- Joint Sourcing for Affordable, Healthy and Sustainable Food in Europe \(15,000+ suppliers, scaling own-brand) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 120 Tm (and sourcing complexity\)) Tj ET
+BT /F1 9 Tf 0.2 0.35 0.6 rg 1 0 0 1 45 107.5 Tm (\(https://newsroom.aholddelhaize.com/joint-sourcing-for-more-affordable-healthy-and-sustainable-food-in-europe/\)) Tj ET
+q 0.85 0.85 0.85 rg 45 46 505 0.8 re f Q
+BT /F1 8.5 Tf 0.5 0.5 0.5 rg 1 0 0 1 45 33 Tm (Evidence quality: thin    -    Generated by Reply Intelligence    -    Human-in-the-loop: drafts never auto-send) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000006065 00000 n 
+0000006162 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+6264
+%%EOF

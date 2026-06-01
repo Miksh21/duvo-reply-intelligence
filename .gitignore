@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# secrets — never commit
+.env
+.env.*
+*.key
+credentials.json
+
+# os / editor
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# build output
+out/
+dist/
