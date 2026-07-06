@@ -17,6 +17,10 @@
 
 ---
 
+> **⤴ Evolution (July 2026): [agentic-reply-engine](https://github.com/Miksh21/agentic-reply-engine).** The ideas in this repo grew into a more advanced, more agentic version — a **12-route** reply engine where 11 routes run fully autonomously (in-thread replies, calendar invites, referral enrollment, scheduled re-engagement, suppression) and exactly **one** escalates to a human, backed by a Postgres message ledger and a weekly self-learning loop. This repo keeps a human on every send *by design* — the right call for a first deployment on someone else's brand. That one shows where the design goes once guardrails and an audit trail have earned the autonomy.
+
+---
+
 ## The note (read this first)
 
 Hi Tom — you said pick something slow and manual that drives me a bit mad, fix it, and show you. So here it is, on your stack.
@@ -135,6 +139,8 @@ Tom — you asked where it falls over at scale. The real ones, from building it:
 3. **Action the remaining triage routes** — objection → handling draft + task; referral → create the new contact; unsubscribe → real suppression to lemlist + HubSpot; not_interested → closed-lost with reason. *(Closes #7 + most of the gtm-master gaps.)*
 4. **Real idempotency** — a stable `dealKey` (normalized `prospect_email`) + a short-lived lock so the eventual-consistency window can't double-create; same for meetings (`dealId + day`). *(Kills #3.)*
 5. **Reconciliation poll** over lemlist's unified inbox to catch AE-direct replies and mark the card "handled directly." *(Closes #5.)*
+
+*Update: items 3 and 5 have since been designed end-to-end — and generalized well beyond this scope — in [agentic-reply-engine](https://github.com/Miksh21/agentic-reply-engine), the fully-agentic evolution of this handler.*
 
 ## Run it yourself
 
