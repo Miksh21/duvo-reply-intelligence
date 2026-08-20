@@ -1,0 +1,15 @@
+{
+  "type": "emailsReplied",
+  "campaignId": "camp-grocery-tier1",
+  "campaignName": "Q2 Retail Ops — Tier 1 Grocery",
+  "dealId": "deal-001",
+  "leadId": "lead-ahold-bram",
+  "prospect": {
+    "name": "Bram de Vries",
+    "title": "Chief Commercial Officer",
+    "company": "Ahold Delhaize",
+    "email": "bram.devries@example-ahold.com"
+  },
+  "replyText": "Tomáš — saw your note. We're actually exploring a couple of vendors in this space right now after our Q3 review surfaced some gaps in supplier ops. Open to 20 min next week if Wed/Thu works. Best to coordinate with my chief of staff Sarah (cc'd).",
+  "sentAt": "2026-05-29T08:14:00Z"
+}

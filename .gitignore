@@ -4,6 +4,7 @@ node_modules/
 # secrets — never commit
 .env
 .env.*
+!.env.example
 *.key
 credentials.json
 
@@ -14,5 +15,12 @@ credentials.json
 .vscode/
 
 # build output
-out/
 dist/
+
+# Demo output: Slack cards (fallback mode) and HubSpot state snapshots land here.
+# out/* rather than out/, so the directory itself stays tracked via .gitkeep.
+out/*
+!out/.gitkeep
+!out/slack-cards/
+out/slack-cards/*
+!out/slack-cards/.gitkeep

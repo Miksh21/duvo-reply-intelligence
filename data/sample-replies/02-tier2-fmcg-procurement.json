@@ -1,0 +1,15 @@
+{
+  "type": "emailsReplied",
+  "campaignId": "camp-fmcg-tier2",
+  "campaignName": "Q2 P2P Automation — FMCG",
+  "dealId": "deal-002",
+  "leadId": "lead-henkel-daniel",
+  "prospect": {
+    "name": "Daniel Brandt",
+    "title": "Head of Procurement Operations",
+    "company": "Henkel",
+    "email": "daniel.brandt@example-henkel.com"
+  },
+  "replyText": "Interesting — we've been burned by RPA before so I'm cautious, but our procure-to-pay is a mess. Tell me more?",
+  "sentAt": "2026-05-29T15:42:00Z"
+}

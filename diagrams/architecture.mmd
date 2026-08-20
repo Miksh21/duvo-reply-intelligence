@@ -1,0 +1,32 @@
+flowchart TB
+    subgraph A["TRIGGER A — a lemlist reply arrives"]
+        direction TB
+        A0["POST /webhook/lemlist-reply"] --> A1["OpenAI triage<br/>classify + extract MEDDPICC signals"]
+        A1 -->|positive| A2["Claude drafts calendar-aware reply<br/>(proposes real open slots)"]
+        A1 -->|positive| A3["write signals to HubSpot deal"]
+        A1 -->|else| AX["log + stop"]
+        A2 --> A4["Slack card:<br/>draft reply + signals + [Send] [Edit] [Wrong class]"]
+        A3 --> A4
+        A4 --> A5(["human approves → meeting booked"])
+    end
+
+    subgraph B["TRIGGER B — morning of a booked meeting"]
+        direction TB
+        B0["scheduler scan / POST /trigger-b/run<br/>(meetings within BRIEF_LEAD_HOURS)"] --> B1["read HubSpot deal context<br/>(incl. Trigger-A signals)"]
+        B1 --> B2["Claude generates 3 targeted Exa queries"]
+        B2 --> B3["3 Exa searches in parallel"]
+        B3 --> B4["Claude synthesizes brief:<br/>paragraph + 5 discovery Qs + 3 sources"]
+        B4 --> B5["write brief to HubSpot deal"]
+        B4 --> B6["Slack brief to the rep"]
+    end
+
+    A5 -. "decoupled: fires later, only for meetings that actually happen" .-> B0
+
+    classDef openai fill:#10a37f,color:#fff,stroke:#0b7a5e;
+    classDef claude fill:#d97757,color:#fff,stroke:#b85c3e;
+    classDef exa fill:#1f6feb,color:#fff,stroke:#1452b8;
+    classDef human fill:#f5d90a,color:#222,stroke:#c9b200;
+    class A1 openai;
+    class A2,B2,B4 claude;
+    class B3 exa;
+    class A5 human;

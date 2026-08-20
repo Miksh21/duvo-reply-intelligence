@@ -147,9 +147,23 @@ Tom — you asked where it falls over at scale. The real ones, from building it:
 ```
 workflow/reply-intelligence.workflow.json   import into n8n (credential IDs are YOUR_* placeholders)
 docs/architecture.svg | .png                 the live-canvas diagram
+src/ prompts/ data/ scripts/                 the same system as a standalone TypeScript service
 ```
 
-Import the workflow, create the six credentials (Anthropic, HubSpot, Sumble, Exa, lemlist, Slack), replace the `YOUR_*` placeholders, register a lemlist `emailsReplied` hook → `/webhook/reply-native`, and point your Slack app's interactivity URL → `/webhook/slack-action`.
+**The n8n build** is the one in the Loom and the diagram. Import the workflow, create the six credentials (Anthropic, HubSpot, Sumble, Exa, lemlist, Slack), replace the `YOUR_*` placeholders, register a lemlist `emailsReplied` hook → `/webhook/reply-native`, and point your Slack app's interactivity URL → `/webhook/slack-action`.
+
+**The TypeScript service** is the same two triggers written as a small server, and it is the faster way to read the logic: `src/triggerA/` is triage → draft → card, `src/triggerB/` is the morning brief, and `prompts/` holds the four prompts as plain markdown rather than buried in node parameters.
+
+```bash
+npm install
+cp .env.example .env          # an LLM key and EXA_API_KEY are the only ones needed
+npm run dev                   # starts on :3000
+./scripts/demo-trigger-a.sh   # POSTs a sample reply from data/sample-replies/
+```
+
+HubSpot, Slack and lemlist are optional. Without them it runs against an in-memory
+HubSpot seeded from `data/mock-hubspot-deals.json` and writes the Slack cards it would
+have posted to `out/slack-cards/`, so you can see the output without connecting anything.
 
 ---
 

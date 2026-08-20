@@ -1,0 +1,59 @@
+{
+  "_note": "Seed for the in-memory HubSpotClient. `properties` holds the writable fields the system fills in: Trigger A writes the meddpicc_* signals; Trigger B writes pre_meeting_brief + evidence_quality (+ any meddpicc_updates). They start null so the demo visibly fills them. This seed file is never mutated — live state is kept in memory and snapshotted to out/hubspot-deals.json after each write.",
+  "deal-001": {
+    "id": "deal-001",
+    "dealname": "Ahold Delhaize — Retail Ops Automation",
+    "amount": null,
+    "dealstage": "appointmentscheduled",
+    "pipeline": "outbound-2026",
+    "company": "Ahold Delhaize",
+    "industry": "Grocery Retail (Tier 1)",
+    "contact": {
+      "name": "Bram de Vries",
+      "title": "Chief Commercial Officer",
+      "email": "bram.devries@example-ahold.com"
+    },
+    "source": "lemlist — Q2 Retail Ops campaign. Cold email sent 2026-05-27.",
+    "properties": {
+      "meddpicc_pain": null,
+      "meddpicc_competitor": null,
+      "meddpicc_champion": null,
+      "meddpicc_timeline": null,
+      "meddpicc_decision_process": null,
+      "meddpicc_metrics": null,
+      "meddpicc_economic_buyer": null,
+      "meddpicc_decision_criteria": null,
+      "meddpicc_competition": null,
+      "pre_meeting_brief": null,
+      "evidence_quality": null
+    }
+  },
+  "deal-002": {
+    "id": "deal-002",
+    "dealname": "Henkel — Procure-to-Pay Automation",
+    "amount": null,
+    "dealstage": "appointmentscheduled",
+    "pipeline": "outbound-2026",
+    "company": "Henkel",
+    "industry": "FMCG / Consumer Goods (Tier 2)",
+    "contact": {
+      "name": "Daniel Brandt",
+      "title": "Head of Procurement Operations",
+      "email": "daniel.brandt@example-henkel.com"
+    },
+    "source": "lemlist — Q2 P2P Automation campaign. Cold email sent 2026-05-27.",
+    "properties": {
+      "meddpicc_pain": null,
+      "meddpicc_competitor": null,
+      "meddpicc_champion": null,
+      "meddpicc_timeline": null,
+      "meddpicc_decision_process": null,
+      "meddpicc_metrics": null,
+      "meddpicc_economic_buyer": null,
+      "meddpicc_decision_criteria": null,
+      "meddpicc_competition": null,
+      "pre_meeting_brief": null,
+      "evidence_quality": null
+    }
+  }
+}

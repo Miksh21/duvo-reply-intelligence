@@ -1,0 +1,102 @@
+{
+  "timezone": "Europe/Prague",
+  "businessHours": {
+    "start": "09:00",
+    "end": "17:00"
+  },
+  "slotMinutes": 30,
+  "_note": "Busy blocks are weekday templates (no fixed dates). The calendar module maps them onto the real upcoming business week at request time, so findOpenSlots() always returns fresh future gaps no matter when the demo runs. `meetings` starts empty; POST /simulate-send appends a booked meeting here (linked to a deal). `npm run reset` empties it again.",
+  "busy": [
+    {
+      "weekday": "Mon",
+      "start": "09:00",
+      "end": "10:00",
+      "title": "Weekly pipeline sync"
+    },
+    {
+      "weekday": "Mon",
+      "start": "11:00",
+      "end": "12:00",
+      "title": "1:1 — Sales lead"
+    },
+    {
+      "weekday": "Mon",
+      "start": "14:00",
+      "end": "15:30",
+      "title": "Board prep"
+    },
+    {
+      "weekday": "Tue",
+      "start": "09:30",
+      "end": "11:00",
+      "title": "Product review"
+    },
+    {
+      "weekday": "Tue",
+      "start": "13:00",
+      "end": "14:00",
+      "title": "Lunch & learn"
+    },
+    {
+      "weekday": "Tue",
+      "start": "15:00",
+      "end": "16:00",
+      "title": "Customer call — Lidl"
+    },
+    {
+      "weekday": "Wed",
+      "start": "09:00",
+      "end": "09:30",
+      "title": "Standup"
+    },
+    {
+      "weekday": "Wed",
+      "start": "12:00",
+      "end": "13:00",
+      "title": "Lunch"
+    },
+    {
+      "weekday": "Wed",
+      "start": "16:00",
+      "end": "17:00",
+      "title": "Hiring panel"
+    },
+    {
+      "weekday": "Thu",
+      "start": "09:00",
+      "end": "10:00",
+      "title": "Ops review"
+    },
+    {
+      "weekday": "Thu",
+      "start": "11:30",
+      "end": "12:00",
+      "title": "Investor sync"
+    },
+    {
+      "weekday": "Thu",
+      "start": "14:00",
+      "end": "15:00",
+      "title": "Vendor call"
+    },
+    {
+      "weekday": "Fri",
+      "start": "09:00",
+      "end": "10:00",
+      "title": "Forecast call"
+    },
+    {
+      "weekday": "Fri",
+      "start": "10:30",
+      "end": "11:30",
+      "title": "1:1 — Eng lead"
+    },
+    {
+      "weekday": "Fri",
+      "start": "13:00",
+      "end": "15:00",
+      "title": "Deep work (blocked)"
+    }
+  ],
+  "meetings": []
+}
